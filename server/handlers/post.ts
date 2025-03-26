@@ -13,17 +13,36 @@ export const postHandler = {
     });
   },
 
+  async getPostFromId(postId: number) {
+    return await prisma.post.findFirst({
+      select: {
+        author: true,
+        content: true,
+        replies: true,
+      },
+      where: {
+        id: postId,
+      },
+    });
+  },
+
   async getPage(page: number) {
-    return await prisma.post.findMany({
+    const data = await prisma.post.findMany({
       select: {
         id: true,
         author: true,
         content: true,
         replies: true,
+        parentId: true,
+      },
+      where: {
+        parentId: null,
       },
       take: 10,
       skip: page * 10,
     });
+    console.log(data);
+    return data;
   },
 
   async read(id: number) {

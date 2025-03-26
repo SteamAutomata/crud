@@ -1,5 +1,6 @@
 import { User } from "@prisma/client";
 import { Handler, prisma } from "../globals";
+import bcrypt from "bcrypt";
 
 export const userHandler = {
   async list() {
@@ -26,7 +27,7 @@ export const userHandler = {
   async create(data: any) {
     return await prisma.user.create({
       data: {
-        password: "123456",
+        password: await bcrypt.hash("123456", 13),
         ...data,
       },
     });

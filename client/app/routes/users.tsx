@@ -42,7 +42,6 @@ function UserList({
     fetch(api("/user/" + name), { method: "DELETE" })
       .then((r) => r.text())
       .then((r) => {
-        alert(r);
         fetchUsers();
       });
   }
@@ -81,7 +80,10 @@ function UserList({
 export function UserCreateForm() {
   const { register, handleSubmit } = useForm<CreateForm>();
   const onSubmit: SubmitHandler<CreateForm> = (data) =>
-    axios.post(api("/user"), data).catch((e) => alert(e));
+    axios
+      .post(api("/user"), data)
+      .catch((e) => alert(e))
+      .then(() => window.location.reload());
 
   return (
     <form method="post" onSubmit={handleSubmit(onSubmit)} className="p-8">
@@ -108,7 +110,10 @@ export function UserCreateForm() {
 export function UserUpdateForm({ userId }: { userId: number }) {
   const { register, handleSubmit, setValue, formState } = useForm<UpdateForm>();
   const onSubmit: SubmitHandler<UpdateForm> = (data) =>
-    axios.put(api("/user/" + userId), data).catch((e) => alert(e));
+    axios
+      .put(api("/user/" + userId), data)
+      .catch((e) => alert(e))
+      .then(() => window.location.reload());
 
   useEffect(() => {
     if (!userId) return;

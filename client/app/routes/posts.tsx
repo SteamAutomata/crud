@@ -32,12 +32,19 @@ function usePosts() {
   return { posts, loading, error, fetchPosts };
 }
 
-export function WriteANewPost({ respondingToId }: { respondingToId?: number }) {
+export function WriteANewPost({
+  respondingToId,
+  updateFeed,
+}: {
+  respondingToId?: number;
+  updateFeed: any;
+}) {
   const { register, handleSubmit } = useForm<WriteForm>();
   const onSubmit: SubmitHandler<WriteForm> = (data) =>
     axios
       .post(api("/post"), data)
-      .catch((e) => alert(JSON.stringify(e.toJSON())));
+      .catch((e) => alert(e))
+      .then(() => updateFeed());
 
   const [users, setUsers] = useState([]);
 
@@ -80,22 +87,62 @@ export function WriteANewPost({ respondingToId }: { respondingToId?: number }) {
   );
 }
 
-function Post({ post, handleCommentClick }: any) {
-  const replies: Array<unknown> = post.replies;
+function Post({
+  postId,
+  handleCommentClick,
+  respondingToId,
+  updateFeed,
+}: {
+  postId: number;
+  handleCommentClick: any;
+  respondingToId?: number;
+  updateFeed: any;
+}) {
+  const [post, setPost] = useState(null as any);
+
+  useEffect(() => {
+    axios
+      .get(api("/post"), { params: { id: postId } })
+      .then((v) => setPost(v.data))
+      .catch((e) => alert(JSON.stringify(e.toJSON())));
+  }, []);
+
+  if (!post) {
+    return <div className="m-5 p-4">Loading...</div>;
+  }
+
+  const replies: Array<any> = post.replies!;
+  const author = post.author!;
 
   return (
     <div className="m-5 p-4">
       <div>
-        {post.author.avatar !== "" ? <img src={post.author.avatar} /> : <></>}
-        <span>{post.author.name}</span>
+        {author.avatar !== "" ? <img src={author.avatar} /> : <></>}
+        <span>{author.name}</span>
       </div>
       <p>{post.content}</p>
-      <p className="float-right">{post.author.signature}</p>
-      <button onClick={(e) => handleCommentClick(e, post.id)}>Comment</button>
+      <p className="float-right">{author.signature}</p>
+      <button onClick={(e) => handleCommentClick(e, postId)}>Comment</button>
+
+      {respondingToId === postId ? (
+        <WriteANewPost
+          respondingToId={respondingToId}
+          updateFeed={updateFeed}
+        />
+      ) : (
+        <></>
+      )}
+
       {replies.length > 0 ? (
         <div className="m-2">
           {replies.map((r, i) => (
-            <Post post={r} handleCommentClick={handleCommentClick} key={i} />
+            <Post
+              updateFeed={updateFeed}
+              postId={r.id}
+              handleCommentClick={handleCommentClick}
+              key={i}
+              respondingToId={respondingToId} // I love prop drilling
+            />
           ))}
         </div>
       ) : (
@@ -110,28 +157,35 @@ export default function Home() {
   const [respondingToId, setRespondingToId] = useState<number | undefined>(
     undefined
   );
+  const [updater, setUpdater] = useState(0);
+
+  const updateFeed = () => {
+    console.log("should trigger rerender ?");
+    setUpdater(updater + 1);
+  };
 
   useEffect(() => {
     fetchPosts();
-  }, []);
+  }, [updater]);
 
   function handleCommentClick(e: any, postId: number) {
     e.preventDefault();
-    setRespondingToId(postId);
+    setRespondingToId(postId === respondingToId ? undefined : postId);
   }
 
   return (
     <div>
-      {respondingToId ? <></> : <WriteANewPost />}
+      {respondingToId ? <></> : <WriteANewPost updateFeed={updateFeed} />}
 
       {posts.map((post: any, k) => (
         <>
-          <Post post={post} handleCommentClick={handleCommentClick} key={k} />
-          {respondingToId === post.id ? (
-            <WriteANewPost respondingToId={post.id} />
-          ) : (
-            <></>
-          )}
+          <Post
+            updateFeed={updateFeed}
+            postId={post.id}
+            handleCommentClick={handleCommentClick}
+            key={k}
+            respondingToId={respondingToId}
+          />
         </>
       ))}
     </div>
