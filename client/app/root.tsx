@@ -37,7 +37,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <nav className="flex space-x-4 p-4 bg-gray-700">
           <NavLink to="/">Home</NavLink>
           <NavLink to="/users">Users</NavLink>
-          <NavLink to="/posts">Users</NavLink>
+          <NavLink to="/posts">Posts</NavLink>
           <NavLink to="/about">About</NavLink>
         </nav>
         {children}
