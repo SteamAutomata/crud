@@ -1,193 +1,215 @@
-import axios from "axios";
-import { useEffect, useState } from "react";
-import { useForm, type SubmitHandler } from "react-hook-form";
-import { api } from "~/utils";
+import { useContext, useEffect, useState } from 'react'
+import { useForm, type SubmitHandler } from 'react-hook-form'
+import axios from 'axios'
+import { api } from '~/utils'
 
-type WriteForm = {
-  content: string;
-  userId: number;
-  respondingToId: number;
-};
-
-function usePosts() {
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null as any);
-
-  function fetchPosts() {
-    fetch(api("/posts"))
-      .then((response) => {
-        if (!response.ok) {
-          setError(response.status);
-          setLoading(false);
-        }
-        return response.json();
-      })
-      .then((data) => {
-        setPosts(data);
-        setLoading(false);
-      });
-  }
-
-  return { posts, loading, error, fetchPosts };
+interface User {
+  id: number
+  name?: string
+  avatar?: string
 }
 
-export function WriteANewPost({
-  respondingToId,
-  updateFeed,
-}: {
-  respondingToId?: number;
-  updateFeed: any;
-}) {
-  const { register, handleSubmit } = useForm<WriteForm>();
-  const onSubmit: SubmitHandler<WriteForm> = (data) =>
-    axios
-      .post(api("/post"), data)
-      .catch((e) => alert(e))
-      .then(() => updateFeed());
+interface Post {
+  id: number
+  content: string
+  createdAt: string
+  author: User
+  replies: Post[]
+}
 
-  const [users, setUsers] = useState([]);
+type WritePostForm = {
+  content: string
+  userId: number
+  respondingToId?: number
+}
+
+const fetchPosts = async (): Promise<Post[]> => {
+  try {
+    const response = await axios.get(api('/post'))
+    return response.data
+  } catch (error) {
+    console.error('Erreur lors de la récupération des posts', error)
+    return []
+  }
+}
+
+const fetchPost = async (postid: number): Promise<Post | undefined> => {
+  try {
+    const response = await axios.get(api('/post/' + postid))
+    return response.data
+  } catch (error) {
+    console.error('Erreur lors de la récupération des réponses à un post', error)
+    return undefined
+  }
+}
+
+const submitPost = async (data: WritePostForm) => {
+  try {
+    await axios.post(api('/post'), data)
+  } catch (error) {
+    console.error("Erreur lors de l'ajout du post", error)
+  }
+}
+
+const removePost = async (postId: number) => {
+  try {
+    await axios.delete(api('/post/' + postId)).then(_ => fetchPosts())
+  } catch (error) {
+    console.error("Erreur lors de l'ajout du post", error)
+  }
+}
+
+function PostForm({
+  respondingToId,
+  whenPosted,
+}: {
+  respondingToId?: number
+  whenPosted: Function
+}) {
+  const { register, handleSubmit, reset } = useForm<WritePostForm>()
+  const [users, setUsers] = useState([] as User[])
 
   function fetchUsers() {
-    fetch(api("/user"))
-      .then((response) => {
+    fetch(api('/user'))
+      .then(response => {
         if (!response.ok) {
         }
-        return response.json();
+        return response.json()
       })
-      .then((data) => {
-        setUsers(data);
-      });
+      .then(data => {
+        setUsers(data)
+      })
+  }
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const onSubmit: SubmitHandler<WritePostForm> = async data => {
+    await submitPost({ ...data, respondingToId })
+    whenPosted()
+    // reset()
   }
 
-  useEffect(fetchUsers, []);
-
   return (
-    <form method="post" onSubmit={handleSubmit(onSubmit)}>
-      <input type="text" {...register("content")} />
-      <br />
-
-      <label htmlFor="role">Post as:</label>
-      <select {...register("userId")}>
+    <form onSubmit={handleSubmit(onSubmit)} className="mt-2 flex items-center">
+      <input
+        {...register('content', { required: true })}
+        placeholder={respondingToId ? 'Répondre...' : 'Quoi de neuf ?'}
+        className="w-full p-2 border rounded"
+      />
+      <select {...register('userId')} defaultValue={users.length > 0 ? users[0].id : 0}>
         {users.map((user: any) => (
           <option key={user.id} value={user.id}>
             {user.name}
           </option>
         ))}
       </select>
-      <br />
 
-      <input
-        type="hidden"
-        value={respondingToId}
-        {...register("respondingToId")}
-      />
-      <button type="submit">Create</button>
+      <button type="submit" className="bg-blue-500 text-white px-4 py-2 mt-2 rounded">
+        {respondingToId ? 'Répondre' : 'Poster'}
+      </button>
     </form>
-  );
+  )
 }
 
-function Post({
-  postId,
-  handleCommentClick,
-  respondingToId,
-  updateFeed,
+function PostComponent({
+  post,
+  depth,
+  refreshParent,
 }: {
-  postId: number;
-  handleCommentClick: any;
-  respondingToId?: number;
-  updateFeed: any;
+  post: Post
+  depth: number
+  refreshParent: Function
 }) {
-  const [post, setPost] = useState(null as any);
+  const [replies, setReplies] = useState<Post[]>(post.replies || [])
+  const [expanded, setExpanded] = useState(false)
 
-  useEffect(() => {
-    axios
-      .get(api("/post"), { params: { id: postId } })
-      .then((v) => setPost(v.data))
-      .catch((e) => alert(JSON.stringify(e.toJSON())));
-  }, []);
-
-  if (!post) {
-    return <div className="m-5 p-4">Loading...</div>;
+  const loadReplies = async () => {
+    try {
+      const fullPost = await fetchPost(post.id)
+      setReplies((fullPost && fullPost.replies) || [])
+      setExpanded(true)
+    } catch {}
   }
 
-  const replies: Array<any> = post.replies!;
-  const author = post.author!;
+  useEffect(() => {
+    if (depth < 3) {
+      loadReplies()
+    }
+  }, [])
 
   return (
-    <div className="m-5 p-4">
-      <div>
-        {author.avatar !== "" ? <img src={author.avatar} /> : <></>}
-        <span>{author.name}</span>
+    <div className="p-4 border-b border-gray-300">
+      <div className="flex items-center mb-2">
+        {post.author?.avatar && (
+          <img
+            src={post.author?.avatar}
+            alt={post.author?.name || 'Utilisateur'}
+            className="w-10 h-10 rounded-full mr-2"
+          />
+        )}
+        <span className="font-bold">{post.author?.name || 'Anonyme'}</span>
       </div>
-      <p>{post.content}</p>
-      <p className="float-right">{author.signature}</p>
-      <button onClick={(e) => handleCommentClick(e, postId)}>Comment</button>
+      <p className="text-gray-300">{post.content}</p>
+      <span className="text-sm text-gray-500">{post.createdAt}</span>
 
-      {respondingToId === postId ? (
-        <WriteANewPost
-          respondingToId={respondingToId}
-          updateFeed={updateFeed}
-        />
-      ) : (
-        <></>
-      )}
+      <div className="flex items-center">
+        <button
+          onClick={() => {
+            removePost(post.id).then(() => refreshParent())
+          }}
+          className="text-blue-500 text-sm mt-2 w-100"
+        >
+          🗑️
+        </button>
+      </div>
 
-      {replies.length > 0 ? (
-        <div className="m-2">
-          {replies.map((r, i) => (
-            <Post
-              updateFeed={updateFeed}
-              postId={r.id}
-              handleCommentClick={handleCommentClick}
-              key={i}
-              respondingToId={respondingToId} // I love prop drilling
+      <PostForm respondingToId={post.id} whenPosted={() => loadReplies()} />
+
+      {replies.length > 0 && expanded && (
+        <div className="ml-6 mt-2 border-l pl-4 border-gray-300">
+          {replies.map(reply => (
+            <PostComponent
+              key={reply.id}
+              post={reply}
+              depth={depth + 1}
+              refreshParent={loadReplies}
             />
           ))}
         </div>
-      ) : (
-        <></>
+      )}
+      {!expanded && (
+        <button onClick={loadReplies} className="text-blue-500 text-sm mt-2">
+          Voir les réponses
+        </button>
       )}
     </div>
-  );
+  )
 }
 
-export default function Home() {
-  const { posts, loading, error, fetchPosts } = usePosts();
-  const [respondingToId, setRespondingToId] = useState<number | undefined>(
-    undefined
-  );
-  const [updater, setUpdater] = useState(0);
+export default function Feed() {
+  const [posts, setPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const updateFeed = () => {
-    console.log("should trigger rerender ?");
-    setUpdater(updater + 1);
-  };
-
-  useEffect(() => {
-    fetchPosts();
-  }, [updater]);
-
-  function handleCommentClick(e: any, postId: number) {
-    e.preventDefault();
-    setRespondingToId(postId === respondingToId ? undefined : postId);
+  function getPosts() {
+    fetchPosts().then(data => {
+      setPosts(data)
+      setLoading(false)
+    })
   }
 
-  return (
-    <div>
-      {respondingToId ? <></> : <WriteANewPost updateFeed={updateFeed} />}
+  useEffect(() => {
+    getPosts()
+  }, [])
 
-      {posts.map((post: any, k) => (
-        <>
-          <Post
-            updateFeed={updateFeed}
-            postId={post.id}
-            handleCommentClick={handleCommentClick}
-            key={k}
-            respondingToId={respondingToId}
-          />
-        </>
+  if (loading) return <p className="text-center text-gray-500">Chargement...</p>
+
+  return (
+    <div className="max-w-2xl mx-auto p-4">
+      <PostForm whenPosted={() => getPosts()} />
+      {posts.map(post => (
+        <PostComponent key={post.id} post={post} depth={0} refreshParent={getPosts} />
       ))}
     </div>
-  );
+  )
 }

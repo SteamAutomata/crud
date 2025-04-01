@@ -1,38 +1,46 @@
-import { Handler, prisma } from "../globals";
+import { Handler, prisma } from '../globals'
+
+const publicUser = { avatar: true, id: true, role: true, signature: true, name: true }
 
 export const postHandler = {
   async list() {
     return await prisma.post.findMany({
       select: {
         id: true,
-        author: true,
+        author: {
+          select: publicUser,
+        },
         content: true,
         replies: true,
       },
       take: 10,
-    });
+    })
   },
 
   async getPostFromId(postId: number) {
     return await prisma.post.findFirst({
       select: {
-        author: true,
+        author: {
+          select: publicUser,
+        },
         content: true,
-        replies: true,
+        replies: { include: { author: { select: publicUser } } },
       },
       where: {
         id: postId,
       },
-    });
+    })
   },
 
   async getPage(page: number) {
     const data = await prisma.post.findMany({
       select: {
         id: true,
-        author: true,
+        author: {
+          select: publicUser,
+        },
         content: true,
-        replies: true,
+        replies: { include: { author: { select: publicUser } } },
         parentId: true,
       },
       where: {
@@ -40,24 +48,22 @@ export const postHandler = {
       },
       take: 10,
       skip: page * 10,
-    });
-    console.log(data);
-    return data;
+    })
+    console.log(data)
+    return data
   },
 
   async read(id: number) {
     const result = await prisma.post.findUnique({
       where: { id: id },
       omit: {},
-    });
-    console.log(`READ ${id} => ${JSON.stringify(result)}`);
-    return result;
+    })
+    console.log(`READ ${id} => ${JSON.stringify(result)}`)
+    return result
   },
 
   async createPost(data: any, userId: number, respondingTo?: number) {
-    const respond = respondingTo
-      ? { parent: { connect: { id: respondingTo } } }
-      : {};
+    const respond = respondingTo ? { parent: { connect: { id: respondingTo } } } : {}
 
     return await prisma.post.create({
       data: {
@@ -65,20 +71,20 @@ export const postHandler = {
         ...respond,
         ...data,
       },
-    });
+    })
   },
 
   async update(id: number, data: any) {
-    console.log(`UPDATE ${id} => ${data}`);
+    console.log(`UPDATE ${id} => ${data}`)
     return await prisma.user.update({
       where: { id },
       data,
-    });
+    })
   },
 
   async delete(id: number) {
-    return await prisma.user.delete({
+    return await prisma.post.delete({
       where: { id },
-    });
+    })
   },
-};
+}

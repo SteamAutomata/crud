@@ -1,127 +1,110 @@
-import ViteExpress from "vite-express";
-import { PrismaClient } from "@prisma/client";
-import express, { IRoute, Request } from "express";
-import cors from "cors";
-import { app, Handler, Payload, prisma } from "./globals";
-import { userHandler } from "./handlers/user";
-import { Response } from "express-serve-static-core";
-import { postHandler } from "./handlers/post";
-import { hash } from "crypto";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
-import dotenv from "dotenv";
+import express, { IRoute, NextFunction, Request } from 'express'
+import cors from 'cors'
+import { app, Handler, Payload, prisma } from './globals'
+import { userHandler } from './handlers/user'
+import { Response } from 'express-serve-static-core'
+import { postHandler } from './handlers/post'
+import jwt from 'jsonwebtoken'
+import bcrypt from 'bcrypt'
+import dotenv from 'dotenv'
+import expressListRoutes from 'express-list-routes'
 
-dotenv.config();
-app.use(cors());
-app.use(express.json());
+dotenv.config()
+app.use(cors())
+app.use(express.json())
 
 // Permet de savoir quand un serveur reçoit une requête
-app.use("/", (req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
-  next();
-});
+app.use('/', (req, res, next) => {
+  console.log(`${req.method} ${req.url} ${JSON.stringify(req.body)}`)
+  next()
+})
 
 export function api(route: string) {
-  return `/api${route}`;
+  return `/api${route}`
 }
 
-/** Essayer d'exécuter le callback, répondre avec une erreur 500 en cas d'échet */
-async function catchJson<T>(res: Response, callback: () => Promise<T>) {
-  try {
-    const result = await callback();
-    res.json(result);
-  } catch (error) {
-    console.log(error.message);
-    res.status(500).json({ error: error.message });
+function handle(fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) {
+  return (req: any, res: any, next: any) => {
+    Promise.resolve(fn(req, res, next))
+      .catch(err => {
+        res.status(500).json({ error: err.message })
+      })
+      .then(v => res.status(200).json(v))
   }
 }
+
 function authMiddleware(req: Request & { payload: Payload }, res, next) {
-  const token = req.headers.authorization;
-  if (!token) return res.status(401).json({ error: "Access denied" });
+  const token = req.headers.authorization
+  if (!token) return res.status(401).json({ error: 'Access denied' })
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY!) as string;
-    req.payload = decoded as unknown as Payload;
-    next();
+    const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY!) as string
+    req.payload = decoded as unknown as Payload
+    next()
   } catch (error) {
-    res.status(401).json({ error: "Invalid token" });
+    res.status(401).json({ error: 'Invalid token' })
   }
 }
 
 function methodNotAllowed(req: any, res: any, next: any) {
-  return res.status(405).send();
+  return res.status(405).send()
 }
-
-/** Opérations CRUD de base */
-function crud(route: string, handler: Handler<any>) {
-  // :id specific
-  app
-    .route(route + "/:id")
-    .get((req, res) =>
-      catchJson(res, () => handler.read(parseInt(req.params.id)))
-    )
-    .delete(async (req, res) =>
-      catchJson(res, () => handler.delete(parseInt(req.params.id)))
-    )
-    .put(async (req, res) =>
-      catchJson(res, () => handler.update(parseInt(req.params.id), req.body))
-    )
-    .all(methodNotAllowed);
-
-  // plural
-  app
-    .route(route)
-    .get(async (req, res) => catchJson(res, () => handler.list()))
-    .post(async (req, res) => catchJson(res, () => handler.create(req.body)))
-    .all(methodNotAllowed);
-}
-
-crud(api("/user"), userHandler);
-
-app.route(api("/posts")).get(async (req, res) => {
-  catchJson(res, () => postHandler.getPage(0));
-});
 
 app
-  .route(api("/post"))
-  .post(async (req, res) => {
-    try {
-      const body = req.body;
-      const userId = parseInt(body.userId);
-      const respondingToId = parseInt(body.respondingToId);
-      body.userId = undefined;
-      body.respondingToId = undefined;
+  .route(api('/user/:id'))
+  .get(handle(async req => userHandler.read(parseInt(req.params.id)))) // GET User
+  .put(handle(async req => userHandler.update(parseInt(req.params.id), req.body))) // EDIT User
+  .delete(handle(async req => userHandler.delete(parseInt(req.params.id)))) // DELETE User
 
-      await postHandler.createPost(body, userId, respondingToId);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  })
-  .get(async (req, res) => {
-    try {
-      const id = parseInt(req.query.id as any);
-      const data = await postHandler.getPostFromId(id);
-      res.json(data);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+app
+  .route(api('/user/'))
+  .post(handle(async req => userHandler.create(req.body))) // CREATE User
+  .get(handle(async req => userHandler.list())) // LIST User
 
-app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+app
+  .route(api('/post/:id'))
+  .get(handle(req => postHandler.getPostFromId(parseInt(req.params.id, 10))))
+  .delete(handle(req => postHandler.delete(parseInt(req.params.id, 10))))
+  .put(
+    handle(req => {
+      throw 'Not Implemented'
+    })
+  )
+
+app
+  .route(api('/post'))
+  .get(handle(async req => postHandler.getPage(0)))
+  .post(
+    handle(async req => {
+      const { userId, respondingToId, ...body } = req.body
+
+      await postHandler.createPost(
+        body,
+        parseInt(userId, 10),
+        parseInt(respondingToId, 10)
+      )
+
+      return 'Post created successfully'
+    })
+  )
+
+// auth
+app.post(api('/login'), async (req, res) => {
+  const { email, password } = req.body
   const user = await prisma.user.findUnique({
     select: { email: true, password: true, id: true },
     where: { email },
-  });
+  })
 
   if (!user || !(await bcrypt.compare(password, user.password))) {
-    return res.status(401).json({ error: "Invalid credentials" });
+    return res.status(401).json({ error: 'Invalid credentials' })
   }
 
   const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET_KEY!, {
-    expiresIn: "1h",
-  });
-  res.json({ token });
-});
+    expiresIn: '1h',
+  })
+  res.json({ token })
+})
 
-app.listen(3000, () => console.log("Server is listening on port 3000..."));
+expressListRoutes(app)
+app.listen(3000, () => console.log('Server is listening on port 3000...'))
