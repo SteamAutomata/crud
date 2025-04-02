@@ -59,9 +59,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </head>
         <body>
           <nav className="flex space-x-4 p-4 bg-gray-700">
-            <NavLink to="/">Home</NavLink>
+            <NavLink to="/">Posts</NavLink>
             <NavLink to="/users">Users</NavLink>
-            <NavLink to="/posts">Posts</NavLink>
 
             <div className="ml-auto mr-auto" />
 
