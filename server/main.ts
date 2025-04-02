@@ -92,7 +92,14 @@ app
 app.post(api('/login'), async (req, res) => {
   const { email, password } = req.body
   const user = await prisma.user.findUnique({
-    select: { email: true, password: true, id: true },
+    select: {
+      email: true,
+      password: true,
+      id: true,
+      name: true,
+      role: true,
+      avatar: true,
+    },
     where: { email },
   })
 
@@ -100,7 +107,9 @@ app.post(api('/login'), async (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' })
   }
 
-  const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET_KEY!, {
+  const { id, role, name, avatar } = user
+
+  const token = jwt.sign({ id, role, name, avatar }, process.env.JWT_SECRET_KEY!, {
     expiresIn: '1h',
   })
   res.json({ token })

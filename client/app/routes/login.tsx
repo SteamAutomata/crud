@@ -21,8 +21,8 @@ export default function Login() {
         return e.data as { token: string }
       })
       .then(json => {
-        console.log(json)
         CookieManager.setCookie('authorization', json.token)
+        window.location.assign('/')
       })
       .catch(e => alert(e))
   //   .then(() =>)

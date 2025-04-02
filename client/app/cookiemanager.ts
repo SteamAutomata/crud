@@ -1,3 +1,4 @@
+'use client'
 export default class CookieManager {
   static setCookie(name: string, value: string, options: any = {}): void {
     let cookieString = `${name}=${value};`
